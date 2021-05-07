@@ -13,14 +13,16 @@ public class TrajectoryMatrixSolver
     
 
    public static void main(String[] args) {
-       double Ti = 0, Tf = 10, Pi = 0, Pf = 3, Vi = 0, Vf = 3;
+       double Ti = 0, Tf = 10, Pi = 0, Pf = 3, Vi = 0, Vf = 0;
        
        double[] g = {Pi, Pf, Vi, Vf};
        
        double[][] T = produceMatrix(Ti,Tf);
        
        //would then implement the matrix solver function here
-       double[] a = solveTheShit(T, g);
+       //double[] a = solveDatJawn(T, g);
+       
+       //a contains, in order, the coefficients of the cubic polynomial
        
     }
 }
