@@ -68,7 +68,6 @@ class TrajecMatrixSolver {
        
        double[][] T = prodMatrix.matrix(Ti,Tf);
        
-       //would then implement the matrix solver function here
        double[] a = solve(T, g);
        
        //a contains, in order, the coefficients of the cubic polynomial
