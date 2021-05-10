@@ -45,7 +45,7 @@ public double[] solve(double[][] A, double[] b) {
     }
 
 //creates trajectory matrix
-class produceMatrix
+class ProduceMatrix
 {
     public double[][] matrix(double Ti, double Tf) {
         double[][] T = {
