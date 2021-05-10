@@ -13,6 +13,7 @@ public class TrajectoryMatrixSolver
     
 
    public static void main(String[] args) {
+       //random placeholder values
        double Ti = 0, Tf = 10, Pi = 0, Pf = 3, Vi = 0, Vf = 0;
        
        double[] g = {Pi, Pf, Vi, Vf};
