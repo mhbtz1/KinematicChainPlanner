@@ -41,14 +41,21 @@ and we do this after each call of cyclic_coordinate_descent() as well
 */
 
 TrajectoryPlanner trj;
-PathPlanner p;
-GaussianElimination g;
+PathPlanner ida;
 ForwardKinematics FK;
 InverseKinematics IK;
 MatrixOps matPipeline;
+RRT myRRT;
 
+Location cur_loc = new Location(200,300);
+Location goal_loc = new Location(1200,700);
 ArrayList<ArmParameters> armStateMachine = new ArrayList<ArmParameters>();
-int IK_PTR = 0;
+int IK_PTR = 550;
+boolean GOAL_STATE_CHANGED = false;
+boolean fillPathInfo = false;
+boolean TEST_RRT = false;
+boolean draw_obstacle = false;
+PrintWriter controlPoints;
 
 //these will be the parameters for one 2D kinematic chain (we can add more later and generalise this)
 PVector cur = new PVector(680,400);
@@ -61,11 +68,104 @@ ArrayList<PVector> target_points = new ArrayList<PVector>();
 ArrayList< ArrayList<Float> > angle_targets = new ArrayList< ArrayList<Float> >();
 
 
-//THIS CLASS IS EXTRA FOR IF YOU FINISH:
+void runRRT(boolean useVoronoiBias){
+  if(useVoronoiBias){
+     background(0);
+     MotionProfiler M_P = new MotionProfiler();
+     if(!draw_obstacle){
+       if(TEST_RRT){
+        fill(255,0,0);
+        circle(goal_loc.x, goal_loc.y, 8);
+        if(!myRRT.rrtVoronoiBias()){
+          myRRT.displayRRT(myRRT.seed);
+          myRRT.reset();
+          //when we run IDA, we want to check to go to the node which is closest to our goal node (in the case that our goal node isn't in the RRT, which it likely isnt.)
+          Location target = null;
+          float rmin = 1000000007;
+          for(PVector g : myRRT.graph.keySet()){
+            rmin = min(rmin, dist(g.x,g.y,goal_loc.x,goal_loc.y) );
+            if(rmin == dist(g.x,g.y,goal_loc.x,goal_loc.y) ){
+              target = new Location(g.x,g.y); //make a copy of it so that original isnt edited
+            }
+          }
+          ida = new PathPlanner(myRRT.graph, cur_loc, target);
+          ArrayList<PVector> myPath = ida.IDA();
+          for(int i = 0; i < myPath.size()-1; i++){
+            stroke(255,0,255);
+            line(myPath.get(i).x, myPath.get(i).y, myPath.get(i+1).x, myPath.get(i+1).y);
+          }
+          ArrayList<PVector> augmented = ida.augment_waypoints(0.04);
+          for(PVector p: augmented){fill(255,0,255); circle(p.x,p.y,4);}
+          M_P.iterate_profiles();
+          fill(0,255,0);
+          for(Location true_w : M_P.true_waypoints){
+            circle(true_w.x, true_w.y, 8);
+          }
+          stroke(0,0,255);
+        }
+       }
+       String[] s = loadStrings("goal.txt");
+       String line = s[0]; 
+       int one = Integer.parseInt(line.substring(0, line.indexOf(":")));
+       int two = Integer.parseInt(line.substring(line.indexOf(":")+1));
+       if(one != this.goal_loc.x || two != this.goal_loc.y){
+         this.goal_loc = new Location(one,two);
+         GOAL_STATE_CHANGED = true;
+       }
+    }
+  } else {
+    //use Halton sequence for sampling
+     background(0);
+     MotionProfiler M_P = new MotionProfiler();
+      if(!draw_obstacle){
+       if(TEST_RRT){
+        fill(255,0,0);
+        circle(goal_loc.x, goal_loc.y, 8);
+        if(!myRRT.rrtHalton()){
+          myRRT.displayRRT(myRRT.seed);
+          myRRT.reset();
+          //when we run IDA, we want to check to go to the node which is closest to our goal node (in the case that our goal node isn't in the RRT, which it likely isnt.)
+          Location target = null;
+          float rmin = 1000000007;
+          for(PVector g : myRRT.graph.keySet()){
+            rmin = min(rmin, dist(g.x,g.y,goal_loc.x,goal_loc.y) );
+            if(rmin == dist(g.x,g.y,goal_loc.x,goal_loc.y) ){
+              target = new Location(g.x,g.y); //make a copy of it so that original isnt edited
+            }
+          }
+          ida = new PathPlanner(myRRT.graph, cur_loc, target);
+          ArrayList<PVector> myPath = ida.IDA();
+          for(int i = 0; i < myPath.size()-1; i++){
+            stroke(255,0,255);
+            line(myPath.get(i).x, myPath.get(i).y, myPath.get(i+1).x, myPath.get(i+1).y);
+          }
+          ArrayList<PVector> augmented = ida.augment_waypoints(0.04);
+          for(PVector p: augmented){fill(255,0,255); circle(p.x,p.y,4);}
+          M_P.iterate_profiles();
+          fill(0,255,0);
+          for(Location true_w : M_P.true_waypoints){
+            circle(true_w.x, true_w.y, 8);
+          }
+          stroke(0,0,255);
+        }
+       }
+       String[] s = loadStrings("goal.txt");
+       String line = s[0]; 
+       int one = Integer.parseInt(line.substring(0, line.indexOf(":")));
+       int two = Integer.parseInt(line.substring(line.indexOf(":")+1));
+       if(one != this.goal_loc.x || two != this.goal_loc.y){
+         this.goal_loc = new Location(one,two);
+         GOAL_STATE_CHANGED = true;
+       }
+    }
+  }
+}
 
-//If you wish, it could be cool to make a way to create multiple chains onscreen and have each of them running their own IK procedures
+
+
+//it could be cool to make a way to create multiple chains onscreen and have each of them running their own IK procedures
 //This ArmParameters class can be used in order to streamline that process.
-//Also, you could change the arm generation method and maybe try to find ways to generate "better" chains.
+//Also, you could change the arm generation method and maybe try to find ways to generate "better" chains(WIP).
 
 public class ArmParameters{
   PVector cur;
@@ -92,7 +192,7 @@ public class ArmParameters{
 public void GENERATE_CUSTOM_ARM(int LENGTH){
     
    PVector init = new PVector(cur.x,cur.y);
-   float len = 60;
+   float len = 70;
    for(int i = 0; i < LENGTH; i++){
      //WRITE CODE HERE
       float n_ang = random(0,2*PI);
@@ -190,7 +290,7 @@ class InverseKinematics extends ForwardKinematics{
   }
   
   public double angleReduction(double angle){
-    angle = angle % (2.0 * PI);
+    angle = angle % (2.0*PI);
     if( angle < PI )
         angle += (2.0 * PI);
     else if( angle > PI )
@@ -206,7 +306,7 @@ class InverseKinematics extends ForwardKinematics{
     println(abs(end_effector_position.x-desired_position.x));
     println(abs(end_effector_position.y-desired_position.y));
     boolean run =  abs(end_effector_position.x-desired_position.x)>eps_x || abs(end_effector_position.y-desired_position.y) > eps_y;
-    float epsilon = 0.001;
+    float epsilon = 0.01;
     if(run){
       for(int i = this.kinematic_chain.size()-1; i >= 0; i--){
         //In terms of the CCD article, efp represents e, dp returns t, and j represents j
@@ -226,7 +326,7 @@ class InverseKinematics extends ForwardKinematics{
         float cos_angle = acos(max(-1, min(1,(float)p1/(float)mg)));
         //indicates direction of rotation
         float p2 =  (float)(((efp.x - j.x) * (dp.y - j.y)) - ((efp.y-j.y)*(dp.x-j.x)));
-        float sin_angle = asin(max(-1, min(1,p2/(float)mg)));
+        float sin_angle = asin(max(-1, min(1,(float)p2/(float)mg)));
         
         println("NUMERATOR FOR COS: " + p1);
         println("NUMERATOR FOR SIN: " + p2);
@@ -240,11 +340,20 @@ class InverseKinematics extends ForwardKinematics{
         }
         
         float turning_angle = 0;
-        if(sin_angle < 0){
-          turning_angle = cos_angle;
-        } else {
-          turning_angle = -cos_angle;
+        turning_angle = cos_angle;
+        
+        
+        //THIS IS CAUSING SOME WEIRD BEHAVIOR IN FOLLOWING PATHS & TRAJECTORIES
+        /*
+        if(this.end_effector_position.y <= this.kinematic_chain.get(i).start.y){
+          turning_angle *= -1;
         }
+        */
+        
+        
+        
+        
+        
         
         
         
@@ -269,22 +378,27 @@ class InverseKinematics extends ForwardKinematics{
 void setup(){
   size(1400,900);
   matPipeline = new MatrixOps();
+  controlPoints = createWriter("pathPlanner.txt");
   float[][] A = { {1, 2, 3, 4}, {5, 6, 7, 8}, {1, 2, 3, 4}, {5, 6, 7, 8} };
   float[][] B = { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1} };
   int RAD = 300;
   for(float f = 0; f <= 2*PI; f+= 0.01){
-    target_points.add(new PVector(cur.x + (RAD*cos(f)),cur.y + (RAD*sin(f)) ) );
+    target_points.add(new PVector(cur.x + (1.5*RAD*cos(f)),cur.y + 1.5*RAD*sin(f)) );
   }
   armStateMachine.add(new ArmParameters(cur,new ArrayList<ArmSegment>(),new ArrayList<Float>(), new ArrayList<Float>(), target_points.get(0)));
-  GENERATE_CUSTOM_ARM(12);//will modify this to generate "better" kinematic chains
+  GENERATE_CUSTOM_ARM(50);//will modify this to generate "better" kinematic chains
   IK = new InverseKinematics(robotArm, cur, angles, arm_lengths);
+  /*
   for(int i = 0; i < target_points.size(); i++){
+    while(IK.cyclic_coordinate_descent(target_points.get(i)).size() > 0){
+      IK_PTR = (IK_PTR + 1)%(target_points.size());
+    }
   }
+  */
 }
 
 void draw(){
   background(0);
-  //delay(1000);
   DRAW_ROBOT_ARM(IK);
   println("KINEMATIC CHAIN ANGLES: ");
   for(Float f : IK.angles){
@@ -300,6 +414,6 @@ void draw(){
   fill(125,125,255);
   ellipse(target_point.x, target_point.y, 8,8);
   if(IK.cyclic_coordinate_descent(target_point).size() > 0){
-    IK_PTR = (IK_PTR + 1)%(254);
+    IK_PTR = (IK_PTR + 1)%(target_points.size());
   }
 }
