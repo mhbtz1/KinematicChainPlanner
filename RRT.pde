@@ -40,6 +40,7 @@ class PQTwo implements Comparator<PVector>{
 
 
 class RRT{
+   HaltonSampler hq;
    PVector seed;
    float dq;
    float MAX_ITER;
@@ -74,6 +75,8 @@ class RRT{
      graph = new HashMap<PVector, ArrayList<GType> >();
      seen_space.add(seed);
      this.INTERNAL_COUNTER = 0;
+     hq = new HaltonSampler(1400,900);
+     hq.genHalton(4000);
    }
    //this method is kind of computationally heavy
    public PVector nearest_point(PVector comp){
@@ -111,12 +114,7 @@ class RRT{
        MAX_DISTS.add( (float)(DIST) );
        pq.clear();
      }
-     /*
-     for(int i = 0; i < MAX_DISTS.size(); i++){
-       println(MAX_DISTS.get(i));
-     }
-     println("-----------------------------------------------");
-     */
+
      ArrayList<Float> nxt = softmax(MAX_DISTS);
      ArrayList<PVector> sample = new ArrayList<PVector>();
      for(int i = 0; i < nxt.size(); i++){
@@ -124,9 +122,7 @@ class RRT{
      }
      Collections.sort(sample, new PQTwo());
      int idx = (int)sample.get(sample.size()-1).y;
-     //for(int i = 0; i < sample.size(); i++){print(sample.get(i) + " ");}println();
-     
-     
+
      for(int i = 0; i < sample.size(); i++){
        float f = random(0,1);
        if(sample.get(i).x >= f){
@@ -151,8 +147,8 @@ class RRT{
    }
    
    
-   
-   public boolean rrtExploration(){
+   //this is basically deprecated; halton sequence works considerably better for what we need
+   public boolean rrtVoronoiBias(){
      println("INTERNAL COUNTER: " + this.INTERNAL_COUNTER);
        float seed = random(0,1);
        if(this.INTERNAL_COUNTER <= this.MAX_ITER/2){
@@ -222,6 +218,19 @@ class RRT{
         return false;
       }
    }
+   
+   public boolean rrtHalton(){
+     if(this.INTERNAL_COUNTER <= this.MAX_ITER){
+       PVector loc = hq.HALTON_POINTS.get( (int)(this.INTERNAL_COUNTER) );
+       PVector nearest = nearest_point(loc);
+       float ang = atan( (float)(loc.y-nearest.y)/(float)(loc.x-nearest.x) );
+       PVector new_pt = new PVector(nearest.x + (dq*cos(ang)), nearest.y + (dq*sin(ang)) );
+       
+     }
+     return false;
+   }
+   
+   
    
    public void displayRRT(PVector state){
      println("----------------------------------------------------------");
