@@ -4,32 +4,22 @@ import java.nio.*;
 /*
 Forward Kinematics for a 2D kinematic chain can be figured out using some trigonometry stuff although in order to generalise to a 3D space
 we can also use the denavit hartenberg matrices in order to solve the FK problem (although this is decidedly harder)
-
 Inverse Kinematics in 2D, though, is comparably difficult to in 3D space, and for this we will implement an IK algorithm called cyclic coordinate descent
 https://www.ryanjuckett.com/cyclic-coordinate-descent-in-2d/
 The idea is that you try to optimize each individual arm of your chain by attempting to move it closer to the target position and iteratively
 attempt to move closer and closer to the goal state
-
 If you are familiar with machine learning, the forward and inverse kinematics processes can be thought of similar to the feedforward and backpropagation procedures in a 
 neural network, since we can theoretically optimize a chain with any amount of arms in it.
-
 The main issues that are prevalent with CCD is that it tends to make the arm move in unreasonable ways, and in some cases can lead to NaN in some values
 due to weird numerical errors (although I think this can be resolved easily).
-
-
 */
 
 /*
-
 PROJECT STRUCTURE: 
-
 You'll probably notice that we have two important classes here: ForwardKinematics, InverseKinematics, and ArmSegment
-
 The way that we will do this is that we will have the InverseKinematics class extend the ForwardKinematics class, because we need to use FK
 to find out where our end effector is after changing some angle.
-
 ArmSegment is a class for storing the information about each arm in our kinematic chain.
-
 Both classes take the parameters:
    1. ArrayList<ArmSegment> kinematicChain: encodes the structure of the chain for us
    2. PVector seed_position: the position at which the arm is rooted
@@ -47,10 +37,10 @@ InverseKinematics IK;
 MatrixOps matPipeline;
 RRT myRRT;
 
-Location cur_loc = new Location(200,300);
-Location goal_loc = new Location(1200,700);
+Location cur_loc = new Location(200, 300);
+Location goal_loc = new Location(1200, 700);
 ArrayList<ArmParameters> armStateMachine = new ArrayList<ArmParameters>();
-int IK_PTR = 550;
+int IK_PTR = 0;
 boolean GOAL_STATE_CHANGED = false;
 boolean fillPathInfo = false;
 boolean TEST_RRT = false;
@@ -67,6 +57,9 @@ ArrayList<Float> angles = new ArrayList<Float>();
 ArrayList<PVector> target_points = new ArrayList<PVector>();
 ArrayList< ArrayList<Float> > angle_targets = new ArrayList< ArrayList<Float> >();
 
+//for drawing, maintain list of reached waypoints:
+ArrayList<PVector> reached_points = new ArrayList<PVector>();
+
 
 void runRRT(boolean useVoronoiBias){
   if(useVoronoiBias){
@@ -75,7 +68,7 @@ void runRRT(boolean useVoronoiBias){
      if(!draw_obstacle){
        if(TEST_RRT){
         fill(255,0,0);
-        circle(goal_loc.x, goal_loc.y, 8);
+        circle((float)goal_loc.x, (float)goal_loc.y, 8);
         if(!myRRT.rrtVoronoiBias()){
           myRRT.displayRRT(myRRT.seed);
           myRRT.reset();
@@ -83,8 +76,8 @@ void runRRT(boolean useVoronoiBias){
           Location target = null;
           float rmin = 1000000007;
           for(PVector g : myRRT.graph.keySet()){
-            rmin = min(rmin, dist(g.x,g.y,goal_loc.x,goal_loc.y) );
-            if(rmin == dist(g.x,g.y,goal_loc.x,goal_loc.y) ){
+            rmin = min(rmin, dist(g.x,g.y,(float)goal_loc.x,(float)goal_loc.y) );
+            if(rmin == dist(g.x,g.y,(float)goal_loc.x,(float)goal_loc.y) ){
               target = new Location(g.x,g.y); //make a copy of it so that original isnt edited
             }
           }
@@ -99,7 +92,7 @@ void runRRT(boolean useVoronoiBias){
           M_P.iterate_profiles();
           fill(0,255,0);
           for(Location true_w : M_P.true_waypoints){
-            circle(true_w.x, true_w.y, 8);
+            circle( (float)true_w.x, (float)true_w.y, 8);
           }
           stroke(0,0,255);
         }
@@ -120,7 +113,7 @@ void runRRT(boolean useVoronoiBias){
       if(!draw_obstacle){
        if(TEST_RRT){
         fill(255,0,0);
-        circle(goal_loc.x, goal_loc.y, 8);
+        circle( (float)goal_loc.x, (float)goal_loc.y, 8);
         if(!myRRT.rrtHalton()){
           myRRT.displayRRT(myRRT.seed);
           myRRT.reset();
@@ -192,7 +185,7 @@ public class ArmParameters{
 public void GENERATE_CUSTOM_ARM(int LENGTH){
     
    PVector init = new PVector(cur.x,cur.y);
-   float len = 70;
+   float len = 90;
    for(int i = 0; i < LENGTH; i++){
      //WRITE CODE HERE
       float n_ang = random(0,2*PI);
@@ -281,8 +274,8 @@ class ForwardKinematics{
 class InverseKinematics extends ForwardKinematics{
   
   //these parameters eps_x and eps_y set an error bound for our CCD function (since we don't necessarily want to be right on the point, just close enough)
-  public static final float eps_x = 10;
-  public static final float eps_y = 10;
+  public static final float eps_x = 5;
+  public static final float eps_y = 5;
   PVector end_effector_position;
   public InverseKinematics(ArrayList<ArmSegment> kinematic_chain, PVector seed_position, ArrayList<Float> angles, ArrayList<Float> arm_lengths){
     super(kinematic_chain,seed_position,angles,arm_lengths);
@@ -325,13 +318,14 @@ class InverseKinematics extends ForwardKinematics{
         
         float cos_angle = acos(max(-1, min(1,(float)p1/(float)mg)));
         //indicates direction of rotation
-        float p2 =  (float)(((efp.x - j.x) * (dp.y - j.y)) - ((efp.y-j.y)*(dp.x-j.x)));
+        float p2 =  (float)(((efp.x * dp.y) - (efp.y*dp.x)));
         float sin_angle = asin(max(-1, min(1,(float)p2/(float)mg)));
         
         println("NUMERATOR FOR COS: " + p1);
         println("NUMERATOR FOR SIN: " + p2);
         println("MAGNITUDE: " + mg);
         println("IK VALUES: " + cos_angle + " " + sin_angle);
+        println("P2: " + p2);
         
         //i think the weird issues with NaN in our CCD algo may be due to some domain issues with asin() and acos()
         if(dist(desired_position.x, desired_position.y, this.end_effector_position.x, this.end_effector_position.y) <= epsilon){
@@ -344,11 +338,9 @@ class InverseKinematics extends ForwardKinematics{
         
         
         //THIS IS CAUSING SOME WEIRD BEHAVIOR IN FOLLOWING PATHS & TRAJECTORIES
-        /*
-        if(this.end_effector_position.y <= this.kinematic_chain.get(i).start.y){
+        if( p2 < 0){
           turning_angle *= -1;
         }
-        */
         
         
         
@@ -382,11 +374,33 @@ void setup(){
   float[][] A = { {1, 2, 3, 4}, {5, 6, 7, 8}, {1, 2, 3, 4}, {5, 6, 7, 8} };
   float[][] B = { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1} };
   int RAD = 300;
+  /*
   for(float f = 0; f <= 2*PI; f+= 0.01){
-    target_points.add(new PVector(cur.x + (1.5*RAD*cos(f)),cur.y + 1.5*RAD*sin(f)) );
+    target_points.add(new PVector(cur.x + (RAD*cos(f)),cur.y + 1*RAD*sin(f)) );
   }
+  */
+  PVector vertex = new PVector(680,700);
+  
+  for(float f = 0; f <= 2* PI; f += 0.01){
+    target_points.add(new PVector(cur.x + 2*RAD*cos(f), cur.y + RAD*sin(f)) );
+  }
+  
+  /*
+  for(float f = 280; f <= 800; f++){
+    target_points.add(new PVector(420,f));
+  }
+  for(float f = 420; f <= 940; f++){
+    target_points.add(new PVector(f, 800));
+  }
+  for(float f = 800; f >= 280; f--){
+    target_points.add(new PVector(940,f));
+  }
+  for(float f = 940; f >= 420; f--){
+    target_points.add(new PVector(f,280));
+  }
+  */
   armStateMachine.add(new ArmParameters(cur,new ArrayList<ArmSegment>(),new ArrayList<Float>(), new ArrayList<Float>(), target_points.get(0)));
-  GENERATE_CUSTOM_ARM(50);//will modify this to generate "better" kinematic chains
+  GENERATE_CUSTOM_ARM(20);//will modify this to generate "better" kinematic chains
   IK = new InverseKinematics(robotArm, cur, angles, arm_lengths);
   /*
   for(int i = 0; i < target_points.size(); i++){
@@ -408,12 +422,14 @@ void draw(){
   PVector ret = IK.APPLY_FK();
   noStroke();
   ellipse(ret.x, ret.y, 10, 10);
-  for(PVector p : target_points){noStroke(); fill(0,255,0); ellipse(p.x, p.y, 8, 8);}
+  for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
   
   PVector target_point = target_points.get(IK_PTR);
   fill(125,125,255);
   ellipse(target_point.x, target_point.y, 8,8);
+  if(IK_PTR==target_points.size()-1){reached_points.clear();}
   if(IK.cyclic_coordinate_descent(target_point).size() > 0){
     IK_PTR = (IK_PTR + 1)%(target_points.size());
+    reached_points.add(target_point);
   }
 }
