@@ -380,9 +380,10 @@ void setup(){
   }
   */
   PVector vertex = new PVector(680,700);
-  
-  for(float f = 0; f <= 2* PI; f += 0.01){
-    target_points.add(new PVector(cur.x + 2*RAD*cos(f), cur.y + RAD*sin(f)) );
+  HaltonSampler hq = new HaltonSampler(1400,900);
+  hq.genHalton(2000);
+  for(int i = 0; i < hq.HALTON_POINTS.size(); i++){
+    target_points.add(hq.HALTON_POINTS.get(i));
   }
   
   /*
@@ -400,7 +401,7 @@ void setup(){
   }
   */
   armStateMachine.add(new ArmParameters(cur,new ArrayList<ArmSegment>(),new ArrayList<Float>(), new ArrayList<Float>(), target_points.get(0)));
-  GENERATE_CUSTOM_ARM(20);//will modify this to generate "better" kinematic chains
+  GENERATE_CUSTOM_ARM(12);//will modify this to generate "better" kinematic chains
   IK = new InverseKinematics(robotArm, cur, angles, arm_lengths);
   /*
   for(int i = 0; i < target_points.size(); i++){
