@@ -1,4 +1,5 @@
 
+
 import java.io.*;
 import java.util.*;
 import java.nio.*;
@@ -482,7 +483,7 @@ void draw(){
  
   //add RRT stuff here again
   
-  /*
+  
   background(0);
   if(!USE_TRAJECTORY_PLANNING){
     DRAW_ROBOT_ARM(IK1);
@@ -543,7 +544,7 @@ void draw(){
     }
     
   }
-  */
+  
   
   
 }
