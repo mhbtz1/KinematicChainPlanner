@@ -1,4 +1,3 @@
-
 import java.io.*;
 import java.util.*;
 import java.nio.*;
@@ -473,18 +472,7 @@ void draw(){
   }
  
   println();
-  /*
-  for(int J_P = 0; J_P < JOINT_INTERPOLATION.size(); J_P++){
-    println("POSE #" + J_P+1);
-    println("SIZE: " + JOINT_INTERPOLATION.size());
-    println("POSE SIZE: " + JOINT_INTERPOLATION.get(J_P).size());
-    ArrayList<Float> jerp = JOINT_INTERPOLATION.get(J_P);
-    for(int j = 0; j < jerp.size(); j++){
-      print(jerp.get(j) + " ");
-    }
-    println();
-  }
-  */
+  
  
   //add RRT stuff here again
   
@@ -510,6 +498,16 @@ void draw(){
       fill(125,125,255);
       ellipse(target_point.x, target_point.y, 8,8);
       if(IK_PTR==target_points.size()-1){
+          for(int J_P = 0; J_P < JOINT_INTERPOLATION.size(); J_P++){
+            println("POSE #" + J_P+1);
+            println("SIZE: " + JOINT_INTERPOLATION.size());
+            println("POSE SIZE: " + JOINT_INTERPOLATION.get(J_P).size());
+            ArrayList<Float> jerp = JOINT_INTERPOLATION.get(J_P);
+            for(int j = 0; j < jerp.size(); j++){
+                print(jerp.get(j) + " ");
+            }
+            println();
+         }
         trj.constructParametrizedTraj(JOINT_INTERPOLATION); 
         TRAJECTORY_NOT_GENERATED=false; 
         reached_points.clear();
@@ -525,15 +523,15 @@ void draw(){
         }
     } else if(!TRAJECTORY_NOT_GENERATED){
       stroke(0);
-      text("USING TRAJECTORY PLANNING", 600, 40);
-      DRAW_ROBOT_ARM(IK1);
-      PVector ret = IK1.APPLY_FK();
+      text("USING TRAJECTORY PLANNING...", 600, 40);
+      DRAW_ROBOT_ARM(IK2);
+      PVector ret = IK2.APPLY_FK();
       noStroke();
       ellipse(ret.x, ret.y, 10, 10);
       for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
       if(IK_PTR >= target_points.size() ){reached_points.clear();}
       println("CURRENT POSE: ");
-      for(float f : IK1.angles){
+      for(float f : IK2.angles){
         print(f + " " );
       }
       println();
@@ -552,8 +550,8 @@ void draw(){
         }
         new_pose.add(new_angle);
       }
-      for(int i = 0; i < new_pose.size(); i++){
-        IK1.angles.set(i,new_pose.get(i));
+      for(int i = new_pose.size()-1; i >= 0; i--){
+        IK2.angles.set(i,new_pose.get(i));
       }
       TIME_PTR += TIME_DELTA;
       if(TIME_PTR >= 3){
@@ -566,7 +564,7 @@ void draw(){
     }
   } else {
     stroke(255);
-    text("WITHOUT TRAJECTORY PLANNING", 650, 40);
+    text("WITHOUT TRAJECTORY PLANNING...", 650, 40);
     DRAW_ROBOT_ARM(IK1);
     println("KINEMATIC CHAIN ANGLES: ");
     for(Float f : IK1.angles){
