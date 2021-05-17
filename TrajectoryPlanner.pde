@@ -9,8 +9,8 @@ class TrajectoryPlanner{
       this.quinticTraj = new ArrayList< ArrayList<TrajecMatrixSolver> >();
     }
     public void constructParametrizedTraj(ArrayList< ArrayList<Float> > JOINT_INTERPOLATION){
-       ArrayList< ArrayList<TrajecMatrixSolver> > quinticTraj = new ArrayList< ArrayList<TrajecMatrixSolver> >();
-       ArrayList<Float> current_pose = IK1.angles;
+       ArrayList< ArrayList<TrajecMatrixSolver> > traj = new ArrayList< ArrayList<TrajecMatrixSolver> >();
+       ArrayList<Float> current_pose = (ArrayList)IK2.angles.clone();
        ArrayList<Float> current_velocity = new ArrayList<Float>();
        ArrayList<Float> current_acceleration = new ArrayList<Float>();
        for(int i = 0; i < CHAIN_SIZE; i++){current_velocity.add(0.0); current_acceleration.add(0.0);}
@@ -20,15 +20,36 @@ class TrajectoryPlanner{
          for(int j = 0; j < tmp.size(); j++){
            float rv = random(0,1);
            float ra = random(0,1);
-           TrajecMatrixSolver tms = new TrajecMatrixSolver(0, 15, current_pose.get(j), tmp.get(j), current_velocity.get(j), rv, current_acceleration.get(j), ra);
+           TrajecMatrixSolver tms = new TrajecMatrixSolver(0, 3, current_pose.get(j), tmp.get(j), current_velocity.get(j), rv, 0, 0);
+           double[][] d = tms.quinticMatrix(0,3);
+           /*
+           println("MATRIX: ");
+           for(int k = 0; k < d.length; k++){
+             for(int l = 0; l < d[0].length; l++){
+               print(d[k][l] + " " );
+             }
+             println();
+           }
+           println("B VECTOR: " );
+           print(0 + " " + 3 + " " + current_pose.get(j) + " " + tmp.get(j) + " " + current_velocity.get(j) + " " + rv + " " + 0 + " " + 0);
+           println();
+           println("SOLUTION: " );
+           for(int l = 0; l < tms.solution_vector.length; l++){
+             print(tms.solution_vector[l] + " ");
+           }
+           println();
+           println();
+           */
            cur_joint.add(tms);
-           current_pose.set(j, tmp.get(j));
            current_velocity.set(j,rv);
            current_acceleration.set(j,ra);
          }
-         quinticTraj.add(cur_joint);
+         for(int j = 0; j < tmp.size(); j++){
+           current_pose.set(j,tmp.get(j));
+         }
+         traj.add(cur_joint);
        }
-       this.quinticTraj = quinticTraj;
+       this.quinticTraj = traj;
     }
 }
 
