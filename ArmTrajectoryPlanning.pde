@@ -1,5 +1,4 @@
 
-
 import java.io.*;
 import java.util.*;
 import java.nio.*;
@@ -47,7 +46,8 @@ boolean GOAL_STATE_CHANGED = false;
 boolean fillPathInfo = false;
 boolean TEST_RRT = false;
 boolean draw_obstacle = false;
-boolean USE_TRAJECTORY_PLANNING = false;
+boolean USE_TRAJECTORY_PLANNING = true;
+boolean TRAJECTORY_NOT_GENERATED = true;
 int CHAIN_SIZE = 18;
 
 PrintWriter controlPoints;
@@ -384,6 +384,7 @@ void setup(){
   for(float f = 0; f <= 2*PI; f+= 0.01){
     target_points.add(new PVector(cur.x + (2*RAD*cos(f)),cur.y + RAD*sin(f)) );
   }
+  /*
   for(float f = 0; f <= 2*PI; f+= 0.01){
     target_points.add(new PVector(cur.x + (RAD*cos(f)),cur.y + RAD*sin(f)) );
   }
@@ -393,6 +394,7 @@ void setup(){
   for(float f = 0; f <= 2*PI; f+= 0.01){
     target_points.add(new PVector(cur.x + (0.25*RAD*cos(f)),cur.y + 0.5*RAD*sin(f)) );
   }
+  */
   PVector vertex = new PVector(680,700);
   HaltonSampler hq = new HaltonSampler(1400,900);
   hq.genHalton(2000);
@@ -415,7 +417,7 @@ void setup(){
     }
   }
   IK_PTR=0;
-  trj.constructParametrizedTraj(JOINT_INTERPOLATION);
+  
   /*
   ArrayList<TrajecMatrixSolver> firstPos = trj.quinticTraj.get(0);
   float timer = 0;
@@ -469,7 +471,9 @@ void draw(){
   for(double d : sv){
     print(d + " ");
   }
+ 
   println();
+  /*
   for(int J_P = 0; J_P < JOINT_INTERPOLATION.size(); J_P++){
     println("POSE #" + J_P+1);
     println("SIZE: " + JOINT_INTERPOLATION.size());
@@ -480,12 +484,89 @@ void draw(){
     }
     println();
   }
+  */
  
   //add RRT stuff here again
   
   
   background(0);
-  if(!USE_TRAJECTORY_PLANNING){
+  if(USE_TRAJECTORY_PLANNING){
+    stroke(255);
+    if(TRAJECTORY_NOT_GENERATED){
+      stroke(0);
+      text("GENERATING TRAJECTORY...", 600, 40);
+      DRAW_ROBOT_ARM(IK1);
+      println("KINEMATIC CHAIN ANGLES: ");
+      for(Float f : IK1.angles){
+        print(f + " ");
+      }
+      println();
+      PVector ret = IK1.APPLY_FK();
+      noStroke();
+      ellipse(ret.x, ret.y, 10, 10);
+      for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+      println("LENGTH: " + target_points.size());
+      PVector target_point = target_points.get(IK_PTR);
+      fill(125,125,255);
+      ellipse(target_point.x, target_point.y, 8,8);
+      if(IK_PTR==target_points.size()-1){
+        trj.constructParametrizedTraj(JOINT_INTERPOLATION); 
+        TRAJECTORY_NOT_GENERATED=false; 
+        reached_points.clear();
+       }
+        ArrayList<Float> curpose = new ArrayList<Float>();
+        curpose = IK1.cyclic_coordinate_descent(target_point);
+        if(curpose.size() > 0){
+          if(TRAJECTORY_NOT_GENERATED){
+            JOINT_INTERPOLATION.add(curpose);
+          }
+          IK_PTR = (IK_PTR + 1)%(target_points.size());
+          reached_points.add(target_point);
+        }
+    } else if(!TRAJECTORY_NOT_GENERATED){
+      stroke(0);
+      text("USING TRAJECTORY PLANNING", 600, 40);
+      DRAW_ROBOT_ARM(IK1);
+      PVector ret = IK1.APPLY_FK();
+      noStroke();
+      ellipse(ret.x, ret.y, 10, 10);
+      for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+      if(IK_PTR >= target_points.size() ){reached_points.clear();}
+      println("CURRENT POSE: ");
+      for(float f : IK1.angles){
+        print(f + " " );
+      }
+      println();
+      ArrayList<TrajecMatrixSolver> cur = trj.quinticTraj.get(IK_PTR);
+      ArrayList<Float> new_pose = new ArrayList<Float>();
+      for(int i = 0; i < cur.size(); i++){
+        double[] solution_vector = cur.get(i).solution_vector;
+        float new_angle = 0;
+        println("QUINTIC COEFFICIENTS: ");
+        for(int j = 0; j < solution_vector.length; j++){
+          print(solution_vector[j] + " " );
+        }
+        println();
+        for(int j = 0; j < solution_vector.length; j++){
+          new_angle += (solution_vector[j]) * (pow(TIME_PTR,j));
+        }
+        new_pose.add(new_angle);
+      }
+      for(int i = 0; i < new_pose.size(); i++){
+        IK1.angles.set(i,new_pose.get(i));
+      }
+      TIME_PTR += TIME_DELTA;
+      if(TIME_PTR >= 3){
+          TIME_PTR = 0; 
+          reached_points.add(target_points.get(IK_PTR)); 
+          IK_PTR = (IK_PTR + 1)%target_points.size();
+          println("-------------------------------------------------------------------------");
+      }
+      
+    }
+  } else {
+    stroke(255);
+    text("WITHOUT TRAJECTORY PLANNING", 650, 40);
     DRAW_ROBOT_ARM(IK1);
     println("KINEMATIC CHAIN ANGLES: ");
     for(Float f : IK1.angles){
@@ -500,49 +581,13 @@ void draw(){
     PVector target_point = target_points.get(IK_PTR);
     fill(125,125,255);
     ellipse(target_point.x, target_point.y, 8,8);
-    if(IK_PTR==target_points.size()-1){reached_points.clear();}
-    if(IK1.cyclic_coordinate_descent(target_point).size() > 0){
-      IK_PTR = (IK_PTR + 1)%(target_points.size());
-      reached_points.add(target_point);
-    }
-  } else {
-    DRAW_ROBOT_ARM(IK1);
-    PVector ret = IK1.APPLY_FK();
-    noStroke();
-    ellipse(ret.x, ret.y, 10, 10);
-    for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
-    if(IK_PTR >= target_points.size() ){reached_points.clear();}
-    println("CURRENT POSE: ");
-    for(float f : IK1.angles){
-      print(f + " " );
-    }
-    println();
-    ArrayList<TrajecMatrixSolver> cur = trj.quinticTraj.get(IK_PTR);
-    ArrayList<Float> new_pose = new ArrayList<Float>();
-    for(int i = 0; i < cur.size(); i++){
-      double[] solution_vector = cur.get(i).solution_vector;
-      float new_angle = 0;
-      println("QUINTIC COEFFICIENTS: ");
-      for(int j = 0; j < solution_vector.length; j++){
-        print(solution_vector[j] + " " );
+    if(IK_PTR==target_points.size()-1){TRAJECTORY_NOT_GENERATED=false; reached_points.clear();}
+     ArrayList<Float> curpose = new ArrayList<Float>();
+     curpose = IK1.cyclic_coordinate_descent(target_point);
+     if(curpose.size() > 0){
+        IK_PTR = (IK_PTR + 1)%(target_points.size());
+        reached_points.add(target_point);
       }
-      println();
-      for(int j = 0; j < solution_vector.length; j++){
-        new_angle += (solution_vector[j]) * (pow(TIME_PTR,j));
-      }
-      new_pose.add(new_angle);
-    }
-    for(int i = 0; i < new_pose.size(); i++){
-      IK1.angles.set(i,new_pose.get(i));
-    }
-    TIME_PTR += TIME_DELTA;
-    if(TIME_PTR >= 15){
-        TIME_PTR = 0; 
-        reached_points.add(target_points.get(IK_PTR)); 
-        IK_PTR++;
-        println("-------------------------------------------------------------------------");
-    }
-    
   }
   
   
