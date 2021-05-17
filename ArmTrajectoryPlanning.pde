@@ -46,7 +46,7 @@ boolean GOAL_STATE_CHANGED = false;
 boolean fillPathInfo = false;
 boolean TEST_RRT = false;
 boolean draw_obstacle = false;
-boolean USE_TRAJECTORY_PLANNING = true;
+boolean USE_TRAJECTORY_PLANNING = false;
 int CHAIN_SIZE = 18;
 
 PrintWriter controlPoints;
@@ -469,13 +469,15 @@ void draw(){
     print(d + " ");
   }
   println();
-  
-  
-  for(int i = 0; i < JOINT_INTERPOLATION.size(); i++){
-    ArrayList<Float> jerp = JOINT_INTERPOLATION.get(i);
+  for(int J_P = 0; J_P < JOINT_INTERPOLATION.size(); J_P++){
+    println("POSE #" + J_P+1);
+    println("SIZE: " + JOINT_INTERPOLATION.size());
+    println("POSE SIZE: " + JOINT_INTERPOLATION.get(J_P).size());
+    ArrayList<Float> jerp = JOINT_INTERPOLATION.get(J_P);
     for(int j = 0; j < jerp.size(); j++){
-      
+      print(jerp.get(j) + " ");
     }
+    println();
   }
  
   //add RRT stuff here again
