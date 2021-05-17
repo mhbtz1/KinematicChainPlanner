@@ -47,7 +47,7 @@ boolean TEST_RRT = false;
 boolean draw_obstacle = false;
 boolean USE_TRAJECTORY_PLANNING = true;
 boolean TRAJECTORY_NOT_GENERATED = true;
-int CHAIN_SIZE = 18;
+int CHAIN_SIZE = 16;
 
 PrintWriter controlPoints;
 //these will be the parameters for one 2D kinematic chain (we can add more later and generalise this)
@@ -540,10 +540,12 @@ void draw(){
       for(int i = 0; i < cur.size(); i++){
         double[] solution_vector = cur.get(i).solution_vector;
         float new_angle = 0;
+        /*
         println("QUINTIC COEFFICIENTS: ");
         for(int j = 0; j < solution_vector.length; j++){
           print(solution_vector[j] + " " );
         }
+        */
         println();
         for(int j = 0; j < solution_vector.length; j++){
           new_angle += (solution_vector[j]) * (pow(TIME_PTR,j));
