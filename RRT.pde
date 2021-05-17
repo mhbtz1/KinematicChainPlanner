@@ -68,6 +68,10 @@ class RRT{
      if(hset.containsKey(v)){return true;}return false;
    }
    
+   public boolean detectObstacle(PVector one, PVector two){
+     return true;
+   }
+   
    public RRT(PVector seed, float dq, float MAX_ITER){
      this.seed = seed;
      this.dq = dq;
@@ -269,9 +273,6 @@ class RRT{
      println("----------------------------------------------------------------------------");
    }
    
-   public boolean detectObstacle(PVector one, PVector two){
-     return true;
-   }
    
    public void reset(){
      hset.clear();
