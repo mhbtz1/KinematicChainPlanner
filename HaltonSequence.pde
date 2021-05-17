@@ -30,6 +30,7 @@ class HaltonSampler{
       System.out.println(X + ", " + Y);
        p.add(new PVector(X*sz_x, Y*sz_y)); 
     }
+    this.HALTON_POINTS = p;
     return p;
   }
 }
