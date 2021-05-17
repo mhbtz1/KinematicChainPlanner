@@ -1,3 +1,4 @@
+
 import java.io.*;
 import java.util.*;
 import java.nio.*;
@@ -32,8 +33,6 @@ and we do this after each call of cyclic_coordinate_descent() as well
 
 TrajectoryPlanner trj;
 PathPlanner ida;
-ForwardKinematics FK;
-InverseKinematics IK;
 MatrixOps matPipeline;
 RRT myRRT;
 
@@ -41,22 +40,25 @@ Location cur_loc = new Location(200, 300);
 Location goal_loc = new Location(1200, 700);
 ArrayList<ArmParameters> armStateMachine = new ArrayList<ArmParameters>();
 int IK_PTR = 0;
+float TIME_PTR = 0;
+float TIME_DELTA = 0.15;
 boolean GOAL_STATE_CHANGED = false;
 boolean fillPathInfo = false;
 boolean TEST_RRT = false;
 boolean draw_obstacle = false;
-PrintWriter controlPoints;
+boolean USE_TRAJECTORY_PLANNING = true;
+int CHAIN_SIZE = 18;
 
+PrintWriter controlPoints;
 //these will be the parameters for one 2D kinematic chain (we can add more later and generalise this)
 PVector cur = new PVector(680,400);
 ArrayList<ArmSegment> robotArm = new ArrayList<ArmSegment>();
 ArrayList<Float> arm_lengths = new ArrayList<Float>();
 ArrayList<Float> angles = new ArrayList<Float>();
-
-//We can make an arraylist of target points we want the arm to hit and iterate on this later
 ArrayList<PVector> target_points = new ArrayList<PVector>();
 ArrayList< ArrayList<Float> > angle_targets = new ArrayList< ArrayList<Float> >();
-
+InverseKinematics IK1, IK2;
+ArrayList< ArrayList<Float> > JOINT_INTERPOLATION = new ArrayList< ArrayList<Float> >();
 //for drawing, maintain list of reached waypoints:
 ArrayList<PVector> reached_points = new ArrayList<PVector>();
 
@@ -368,23 +370,71 @@ class InverseKinematics extends ForwardKinematics{
 
 
 void setup(){
+  background(0);
   size(1400,900);
   matPipeline = new MatrixOps();
+  trj = new TrajectoryPlanner();
+  myRRT = new RRT(new PVector(cur_loc.x,cur_loc.y), 45, 1000);
   controlPoints = createWriter("pathPlanner.txt");
   float[][] A = { {1, 2, 3, 4}, {5, 6, 7, 8}, {1, 2, 3, 4}, {5, 6, 7, 8} };
   float[][] B = { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1} };
   int RAD = 300;
-  /*
+  
   for(float f = 0; f <= 2*PI; f+= 0.01){
-    target_points.add(new PVector(cur.x + (RAD*cos(f)),cur.y + 1*RAD*sin(f)) );
+    target_points.add(new PVector(cur.x + (2*RAD*cos(f)),cur.y + RAD*sin(f)) );
   }
-  */
+  for(float f = 0; f <= 2*PI; f+= 0.01){
+    target_points.add(new PVector(cur.x + (RAD*cos(f)),cur.y + RAD*sin(f)) );
+  }
+  for(float f = 0; f <= 2*PI; f+= 0.01){
+    target_points.add(new PVector(cur.x + (RAD*cos(f)),cur.y + 0.5*RAD*sin(f)) );
+  }
+  for(float f = 0; f <= 2*PI; f+= 0.01){
+    target_points.add(new PVector(cur.x + (0.25*RAD*cos(f)),cur.y + 0.5*RAD*sin(f)) );
+  }
   PVector vertex = new PVector(680,700);
   HaltonSampler hq = new HaltonSampler(1400,900);
   hq.genHalton(2000);
+  /*
   for(int i = 0; i < hq.HALTON_POINTS.size(); i++){
     target_points.add(hq.HALTON_POINTS.get(i));
   }
+  */
+  
+  GENERATE_CUSTOM_ARM(CHAIN_SIZE);//will modify this to generate "better" kinematic chains
+  IK1 = new InverseKinematics(robotArm, cur, angles, arm_lengths);
+  IK2 = new InverseKinematics( (ArrayList)robotArm.clone(), cur, (ArrayList)angles.clone(), (ArrayList)arm_lengths.clone());
+  while(IK_PTR < target_points.size()){
+    ArrayList<Float> ret = IK2.cyclic_coordinate_descent(target_points.get(IK_PTR));
+    if(ret.size()==0){
+       continue;
+    } else {
+      JOINT_INTERPOLATION.add(ret);
+      IK_PTR++;
+    }
+  }
+  IK_PTR=0;
+  trj.constructParametrizedTraj(JOINT_INTERPOLATION);
+  /*
+  ArrayList<TrajecMatrixSolver> firstPos = trj.quinticTraj.get(0);
+  float timer = 0;
+  while(timer <= 3){
+    DRAW_ROBOT_ARM(IK1);
+    ArrayList<Float> new_pose = new ArrayList<Float>();
+    for(int i = 0; i < firstPos.size(); i++){
+      double[] solution_vector = firstPos.get(i).solution_vector;
+      float new_angle = 0;
+      for(int j = 0; j < solution_vector.length; j++){
+        new_angle += (solution_vector[j]) * (pow(TIME_PTR,j));
+      }
+      new_pose.add(new_angle);
+    }
+    for(int i = 0; i < new_pose.size(); i++){
+      IK1.angles.set(i,new_pose.get(i));
+    }
+    timer += TIME_DELTA;
+  }
+  */
   
   /*
   for(float f = 280; f <= 800; f++){
@@ -400,9 +450,8 @@ void setup(){
     target_points.add(new PVector(f,280));
   }
   */
-  armStateMachine.add(new ArmParameters(cur,new ArrayList<ArmSegment>(),new ArrayList<Float>(), new ArrayList<Float>(), target_points.get(0)));
-  GENERATE_CUSTOM_ARM(12);//will modify this to generate "better" kinematic chains
-  IK = new InverseKinematics(robotArm, cur, angles, arm_lengths);
+  //armStateMachine.add(new ArmParameters(cur,new ArrayList<ArmSegment>(),new ArrayList<Float>(), new ArrayList<Float>(), target_points.get(0)));
+
   /*
   for(int i = 0; i < target_points.size(); i++){
     while(IK.cyclic_coordinate_descent(target_points.get(i)).size() > 0){
@@ -413,24 +462,86 @@ void setup(){
 }
 
 void draw(){
-  background(0);
-  DRAW_ROBOT_ARM(IK);
-  println("KINEMATIC CHAIN ANGLES: ");
-  for(Float f : IK.angles){
-    print(f + " ");
+  TrajecMatrixSolver sol = new TrajecMatrixSolver(0, 3, 0, 25, 0, 6, 0, 2);
+  double[] sv = sol.solution_vector;
+  println("QUINTIC COEFFICIENTS");
+  for(double d : sv){
+    print(d + " ");
   }
   println();
-  PVector ret = IK.APPLY_FK();
-  noStroke();
-  ellipse(ret.x, ret.y, 10, 10);
-  for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
   
-  PVector target_point = target_points.get(IK_PTR);
-  fill(125,125,255);
-  ellipse(target_point.x, target_point.y, 8,8);
-  if(IK_PTR==target_points.size()-1){reached_points.clear();}
-  if(IK.cyclic_coordinate_descent(target_point).size() > 0){
-    IK_PTR = (IK_PTR + 1)%(target_points.size());
-    reached_points.add(target_point);
+  
+  for(int i = 0; i < JOINT_INTERPOLATION.size(); i++){
+    ArrayList<Float> jerp = JOINT_INTERPOLATION.get(i);
+    for(int j = 0; j < jerp.size(); j++){
+      
+    }
   }
+ 
+  //add RRT stuff here again
+  
+  /*
+  background(0);
+  if(!USE_TRAJECTORY_PLANNING){
+    DRAW_ROBOT_ARM(IK1);
+    println("KINEMATIC CHAIN ANGLES: ");
+    for(Float f : IK1.angles){
+      print(f + " ");
+    }
+    println();
+    PVector ret = IK1.APPLY_FK();
+    noStroke();
+    ellipse(ret.x, ret.y, 10, 10);
+    for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+    println("LENGTH: " + target_points.size());
+    PVector target_point = target_points.get(IK_PTR);
+    fill(125,125,255);
+    ellipse(target_point.x, target_point.y, 8,8);
+    if(IK_PTR==target_points.size()-1){reached_points.clear();}
+    if(IK1.cyclic_coordinate_descent(target_point).size() > 0){
+      IK_PTR = (IK_PTR + 1)%(target_points.size());
+      reached_points.add(target_point);
+    }
+  } else {
+    DRAW_ROBOT_ARM(IK1);
+    PVector ret = IK1.APPLY_FK();
+    noStroke();
+    ellipse(ret.x, ret.y, 10, 10);
+    for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+    if(IK_PTR >= target_points.size() ){reached_points.clear();}
+    println("CURRENT POSE: ");
+    for(float f : IK1.angles){
+      print(f + " " );
+    }
+    println();
+    ArrayList<TrajecMatrixSolver> cur = trj.quinticTraj.get(IK_PTR);
+    ArrayList<Float> new_pose = new ArrayList<Float>();
+    for(int i = 0; i < cur.size(); i++){
+      double[] solution_vector = cur.get(i).solution_vector;
+      float new_angle = 0;
+      println("QUINTIC COEFFICIENTS: ");
+      for(int j = 0; j < solution_vector.length; j++){
+        print(solution_vector[j] + " " );
+      }
+      println();
+      for(int j = 0; j < solution_vector.length; j++){
+        new_angle += (solution_vector[j]) * (pow(TIME_PTR,j));
+      }
+      new_pose.add(new_angle);
+    }
+    for(int i = 0; i < new_pose.size(); i++){
+      IK1.angles.set(i,new_pose.get(i));
+    }
+    TIME_PTR += TIME_DELTA;
+    if(TIME_PTR >= 15){
+        TIME_PTR = 0; 
+        reached_points.add(target_points.get(IK_PTR)); 
+        IK_PTR++;
+        println("-------------------------------------------------------------------------");
+    }
+    
+  }
+  */
+  
+  
 }
