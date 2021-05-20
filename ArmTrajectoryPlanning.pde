@@ -51,7 +51,7 @@ boolean USE_TRAJECTORY_PLANNING = true;
 boolean TRAJECTORY_NOT_GENERATED = true;
 boolean START_RECORDING = false;
 boolean ARM_RRT_WAYPOINTS_NOT_GENERATED = true;
-int CHAIN_SIZE = 12;
+int CHAIN_SIZE = 14;
 
 PrintWriter controlPoints;
 //these will be the parameters for one 2D kinematic chain (we can add more later and generalise this)
@@ -454,8 +454,7 @@ void draw(){
   background(0);
   //RRT path planner
   MotionProfiler M_P = new MotionProfiler();
-   if(!draw_obstacle && START_RECORDING){
-     if(TEST_RRT){
+   if(TEST_RRT && !draw_obstacle && START_RECORDING){
       fill(255,0,0);
       circle(goal_loc.x, goal_loc.y, 8);
       if(!myRRT.rrtVoronoiBias()){
@@ -489,7 +488,7 @@ void draw(){
         ARM_RRT_WAYPOINTS_NOT_GENERATED = false;
         stroke(0,0,255);
       }
-     }
+    
      String[] s = loadStrings("goal.txt");
      String line = s[0]; 
      int one = Integer.parseInt(line.substring(0, line.indexOf(":")));
@@ -498,6 +497,8 @@ void draw(){
        this.goal_loc = new Location(one,two);
        GOAL_STATE_CHANGED = true;
      }
+     
+   }
        /*
        if(SET_OF_WAYPOINTS){
          mr.iterate_profiles();
@@ -505,10 +506,110 @@ void draw(){
        */
      //}
      //path_planning_two();
-   } else {
-    //M_P.iterate_profiles();
-   }
    if((TEST_RRT && RRT_HAS_BEEN_GENERATED) && START_RECORDING){
+    if(USE_TRAJECTORY_PLANNING){
+      stroke(255);
+      if(TRAJECTORY_NOT_GENERATED){
+        stroke(0);
+        text("GENERATING TRAJECTORY...", 600, 20);
+        DRAW_ROBOT_ARM(IK1);
+        println();
+        PVector ret = IK1.APPLY_FK();
+        noStroke();
+        ellipse(ret.x, ret.y, 10, 10);
+        for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+        PVector target_point = target_points.get(IK_PTR);
+        fill(125,125,255);
+        ellipse(target_point.x, target_point.y, 8,8);
+        if(IK_PTR==target_points.size()-1){
+          trj.constructParametrizedTraj(); 
+          TRAJECTORY_NOT_GENERATED=false; 
+          reached_points.clear();
+          IK_PTR=0;
+          trajectoryInformation.close();
+         }
+          ArrayList<Float> curpose =  IK1.cyclic_coordinate_descent(target_point);
+          if(curpose.size() > 0){
+            println("POSE FOUND!");
+            if(TRAJECTORY_NOT_GENERATED){
+              String s = "";
+              //s += Integer.toString(IK_PTR);
+              //s += ":";
+              for(float f : curpose){s += (Float.toString(f) + ",");}
+              println("POSE: " + s);
+              trajectoryInformation.println(s);
+              println("POSE ADDED!");
+              trajectoryInformation.flush();
+            }
+            IK_PTR = (IK_PTR + 1)%(target_points.size());
+            reached_points.add(target_point);
+          }
+      } else if(!TRAJECTORY_NOT_GENERATED){
+        stroke(0);
+        text("USING TRAJECTORY PLANNING...", 600, 20);
+        DRAW_ROBOT_ARM(IK2);
+        PVector ret = IK2.APPLY_FK();
+        noStroke();
+        ellipse(ret.x, ret.y, 10, 10);
+        for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+        String[] IO = loadStrings("trajInfo.txt");
+        if(IK_PTR >= trj.quinticTraj.size()){IK_PTR = 0; reached_points.clear();}
+        println("CURRENT POSE: ");
+        for(float f : IK2.angles){
+          print(f + " " );
+        }
+        println();
+        ArrayList<TrajecMatrixSolver> cur = trj.quinticTraj.get(IK_PTR);
+        ArrayList<Float> new_pose = new ArrayList<Float>();
+        for(int i = 0; i < cur.size(); i++){
+          double[] solution_vector = cur.get(i).solution_vector;
+          float new_angle = 0;
+          /*
+          println("QUINTIC COEFFICIENTS: ");
+          for(int j = 0; j < solution_vector.length; j++){
+            print(solution_vector[j] + " " );
+          }
+          */
+          println();
+          for(int j = 0; j < solution_vector.length; j++){
+            new_angle += (solution_vector[j]) * (pow(TIME_PTR,j));
+          }
+          new_pose.add(new_angle);
+        }
+        for(int i = new_pose.size()-1; i >= 0; i--){
+          IK2.angles.set(i,new_pose.get(i));
+        }
+        TIME_PTR += TIME_DELTA;
+        if(TIME_PTR >= 1){
+            TIME_PTR = 0; 
+            reached_points.add(target_points.get(IK_PTR)); 
+            IK_PTR = (IK_PTR + 1)%target_points.size();
+            println("-------------------------------------------------------------------------");
+        }
+        
+      }
+    } else {
+      stroke(255);
+      text("WITHOUT TRAJECTORY PLANNING...", 600, 20);
+      DRAW_ROBOT_ARM(IK1);
+      println();
+      PVector ret = IK1.APPLY_FK();
+      noStroke();
+      ellipse(ret.x, ret.y, 10, 10);
+      for(PVector p : reached_points){noStroke(); fill(0,0,255); ellipse(p.x, p.y, 8, 8);}
+      println("LENGTH: " + target_points.size());
+      PVector target_point = target_points.get(IK_PTR);
+      fill(125,125,255);
+      ellipse(target_point.x, target_point.y, 8,8);
+      if(IK_PTR==target_points.size()-1){TRAJECTORY_NOT_GENERATED=false; reached_points.clear();}
+       ArrayList<Float> curpose = new ArrayList<Float>();
+       curpose = IK1.cyclic_coordinate_descent(target_point);
+       if(curpose.size() > 0){
+          IK_PTR = (IK_PTR + 1)%(target_points.size());
+          reached_points.add(target_point);
+        }
+    }
+  } else if(!TEST_RRT){
     if(USE_TRAJECTORY_PLANNING){
       stroke(255);
       if(TRAJECTORY_NOT_GENERATED){
@@ -621,5 +722,4 @@ void keyPressed(){
   if(key == ENTER){
     START_RECORDING = true;
   }
-}
 }
