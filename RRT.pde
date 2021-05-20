@@ -68,6 +68,8 @@ class RRT{
      if(hset.containsKey(v)){return true;}return false;
    }
    
+   
+   //detects if a point on line (one,two) is inside of something in our obstacle space. (TRUE) otherwise (FALSE)
    public boolean detectObstacle(PVector one, PVector two){
      return true;
    }
@@ -155,7 +157,7 @@ class RRT{
    public boolean rrtVoronoiBias(){
      println("INTERNAL COUNTER: " + this.INTERNAL_COUNTER);
        float seed = random(0,1);
-       if(this.INTERNAL_COUNTER <= this.MAX_ITER/2){
+       if(this.INTERNAL_COUNTER <= this.MAX_ITER/4){
          PVector rp = new PVector( random(0,1400), random(0,900) );
          PVector closest = nearest_point(rp);
          float ang = atan( (float)(rp.y-closest.y)/(float)(rp.x-closest.x) );
@@ -185,7 +187,7 @@ class RRT{
          seen_space.add(new_pt);
          this.INTERNAL_COUNTER++;
          return true;
-       } else if(this.INTERNAL_COUNTER > this.MAX_ITER/2 && this.INTERNAL_COUNTER < this.MAX_ITER){
+       } else if(this.INTERNAL_COUNTER > this.MAX_ITER/4 && this.INTERNAL_COUNTER < this.MAX_ITER){
          int nxt = k_nearest_neighbors(K);
          println("INDEX: " + nxt);//issue is we are choosing the same node to expand upon too many times
          PVector corres = seen_space.get(nxt);
@@ -219,6 +221,7 @@ class RRT{
          this.INTERNAL_COUNTER++;
          return true;
       } else {
+        RRT_HAS_BEEN_GENERATED = true;
         return false;
       }
    }
